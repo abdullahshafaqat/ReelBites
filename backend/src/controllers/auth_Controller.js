@@ -1,0 +1,174 @@
+const User = require("../models/user");
+const foodPartnerModel = require("../models/food_partner")
+const { hashPassword, comparePassword } = require("../utils/password_Hashing");
+const generateToken = require("../utils/generate_Token");
+const bcrypt = require("bcrypt"); 
+const jwt = require("jsonwebtoken"); 
+
+async function registerUser(req, res) {
+  try {
+    const { name, email, password } = req.body;
+
+    
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    
+    const hashed = await hashPassword(password);
+
+    
+    const user = await User.create({ name, email, password: hashed });
+
+  
+    const token = generateToken(user._id);
+
+    
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000 
+    });
+
+    res.status(201).json({
+      message: "User registered successfully",
+      user: { _id: user._id, name: user.name, email: user.email }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+async function loginUser(req, res) {
+  try {
+    const { email, password } = req.body;
+
+    
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: "Invalid email or password" });
+
+    
+    const isMatch = await comparePassword(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
+
+    
+    const token = generateToken(user._id);
+
+    
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.status(200).json({
+      message: "User logged in successfully",
+      user: { _id: user._id, name: user.name, email: user.email }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+
+function logoutUser(req, res) {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict"
+  });
+  res.status(200).json({ message: "User logged out successfully" });
+}
+
+async function registerFoodPartner(req, res) {
+
+    const { name, email, password, phone, address, contactName } = req.body;
+
+    const isAccountAlreadyExists = await foodPartnerModel.findOne({
+        email
+    })
+
+    if (isAccountAlreadyExists) {
+        return res.status(400).json({
+            message: "Food partner account already exists"
+        })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const foodPartner = await foodPartnerModel.create({
+        name,
+        email,
+        password: hashedPassword,
+        phone,
+        address,
+        contactName
+    })
+
+    const token = jwt.sign({
+        id: foodPartner._id,
+    }, process.env.JWT_SECRET)
+
+    res.cookie("token", token)
+
+    res.status(201).json({
+        message: "Food partner registered successfully",
+        foodPartner: {
+            _id: foodPartner._id,
+            email: foodPartner.email,
+            name: foodPartner.name,
+            address: foodPartner.address,
+            contactName: foodPartner.contactName,
+            phone: foodPartner.phone
+        }
+    })
+
+}
+async function loginFoodPartner(req, res) {
+
+    const { email, password } = req.body;
+
+    const foodPartner = await foodPartnerModel.findOne({
+        email
+    })
+
+    if (!foodPartner) {
+        return res.status(400).json({
+            message: "Invalid email or password"
+        })
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, foodPartner.password);
+
+    if (!isPasswordValid) {
+        return res.status(400).json({
+            message: "Invalid email or password"
+        })
+    }
+
+    const token = jwt.sign({
+        id: foodPartner._id,
+    }, process.env.JWT_SECRET)
+
+    res.cookie("token", token)
+
+    res.status(200).json({
+        message: "Food partner logged in successfully",
+        foodPartner: {
+            _id: foodPartner._id,
+            email: foodPartner.email,
+            name: foodPartner.name
+        }
+    })
+}
+
+function logoutFoodPartner(req, res) {
+    res.clearCookie("token");
+    res.status(200).json({
+        message: "Food partner logged out successfully"
+    });
+}
+module.exports = { registerUser, loginUser, logoutUser, registerFoodPartner, loginFoodPartner, logoutFoodPartner };
