@@ -1,6 +1,6 @@
 const express = require('express');
 const foodController = require("../controllers/food_Controller");
-const { FoodPartnerMiddleware } = require("../middlewares/auth");
+const { FoodPartnerMiddleware,authUserMiddleware } = require("../middlewares/auth");
 const router = express.Router();
 const multer = require('multer');
 
@@ -15,5 +15,6 @@ router.post(
     upload.single("file"), // field name should match what your controller expects
     foodController.createFood
 );
+router.get('/getfooditems', authUserMiddleware, foodController.getFoodItem);
 
 module.exports = router;
